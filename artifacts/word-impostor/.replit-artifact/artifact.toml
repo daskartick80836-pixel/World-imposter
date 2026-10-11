@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Word Impostor"
+description = "A pass-and-play party game where players receive a secret word, find the hidden impostor through discussion, and vote to reveal the result."
+version = "1.0.0"
+id = "artifacts/word-impostor"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24347
+
+[services.development]
+run = "pnpm --filter @workspace/word-impostor run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/word-impostor", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/word-impostor/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24347"
+BASE_PATH = "/"
