@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: game
+    description: Public game configuration
 paths:
   /healthz:
     get:
@@ -24,6 +26,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /game/config:
+    get:
+      operationId: getGameConfig
+      tags: [game]
+      summary: Get supported game languages and categories
+      parameters:
+        - name: language
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/LanguageCode"
+      responses:
+        "200":
+          description: Game configuration for the requested language
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameConfig"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +53,40 @@ components:
           type: string
       required:
         - status
+    LanguageCode:
+      type: string
+      enum: [en, bn, hi, es, fr]
+    CategoryId:
+      type: string
+      enum: [vehicles, household, electronics, animals, school, food]
+    LanguageOption:
+      type: object
+      properties:
+        code:
+          $ref: "#/components/schemas/LanguageCode"
+        label:
+          type: string
+      required: [code, label]
+    CategoryOption:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/CategoryId"
+        label:
+          type: string
+      required: [id, label]
+    GameConfig:
+      type: object
+      properties:
+        language:
+          $ref: "#/components/schemas/LanguageCode"
+        languages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LanguageOption"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryOption"
+      required: [language, languages, categories]
 
