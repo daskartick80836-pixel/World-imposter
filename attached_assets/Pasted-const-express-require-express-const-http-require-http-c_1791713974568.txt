@@ -1,0 +1,222 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+// Expanded Multi-Language Word Database
+const WORD_DB = {
+  en: {
+    vehicles: ["SPACESHIP", "SUBMARINE", "HOVERBOARD", "MONSTER TRUCK", "ELECTRIC SCOOTER", "JETPACK", "BULLET TRAIN"],
+    household: ["AIR PURIFIER", "SMART MIRROR", "ROBOT VACUUM", "ESPRESSO MACHINE", "DESK LAMP", "BEAN BAG"],
+    electronics: ["VIRTUAL REALITY HEADSET", "DRONE", "SMARTWATCH", "GAMING CONSOLE", "MECHANICAL KEYBOARD"],
+    animals: ["CHAMELEON", "PLATYPUS", "SNOW LEOPARD", "ELECTRIC EEL", "PEACOCK", "KANGAROO"],
+    school: ["MICROSCOPE", "3D PRINTER", "PROTRACTOR", "GRAPHING CALCULATOR", "TELESCOPE"],
+    food: ["SUSHI", "WAFFLE", "TACO", "DIM SUM", "CROISSANT", "PASTA"]
+  },
+  bn: {
+    vehicles: ["মহাকাশযান", "সাবমেরিন", "হভারবোর্ড", "ইলেকট্রিক স্কুটার", "বুলেট ট্রেন", "রকেট", "হেলিকপ্টার"],
+    household: ["এয়ার পিউরিফায়ার", "স্মার্ট আয়না", "রোবট ভ্যাকিউম", "কফি মেকার", "রিমোট", "স্টাডি ল্যাম্প"],
+    electronics: ["ভিআর হেডসেট", "ড্রোন", "স্মার্টওয়াচ", "গেমিং কনসোল", "ক্যামেরা", "প্রোজেক্টর"],
+    animals: ["গিরগিটি", "প্লাটিপাস", "তুষার চিতা", "ময়ূর", "ক্যাঙ্গারু", "জলহস্তী"],
+    school: ["মাইক্রোস্কোপ", "প্রোট্র্যাক্টর", "টেলিস্কোপ", "গ্লোব", "ক্যালকুলেটর"],
+    food: ["ফুচকা", "বিরিয়ানি", "মোমো", "বার্গার", "পাস্তা", "প্যাটিজ"]
+  },
+  hi: {
+    vehicles: ["अंतरिक्ष यान", "पनडुब्बी", "हवरबोर्ड", "इलेक्ट्रिक स्कूटर", "बुलेट ट्रेन", "रॉकेट"],
+    household: ["एयर प्यूरीफायर", "स्मार्ट शीशा", "रोबोट वैक्यूम", "कॉफी मशीन", "स्टडी लैंप"],
+    electronics: ["वीआर हेडसेट", "ड्रोन", "स्मार्टवॉच", "गेमिंग कंसोल", "कैमरा"],
+    animals: ["गिरगिट", "तेंदुआ", "मोर", "कंगारू", "दरियाई घोड़ा"],
+    school: ["सूक्ष्मदर्शी", "दूरबीन", "ग्लोब", "कैलकुलेटर"],
+    food: ["समोसा", "बिरयानी", "मोमो", "डोसा", "पास्ता"]
+  },
+  es: {
+    vehicles: ["NAVE ESPACIAL", "SUBMARINO", "MONOPATÍN", "TREN BALA", "COHETE"],
+    household: ["ASPIRADORA ROBOT", "MÁQUINA DE CAFÉ", "LAMPARA", "ESPEJO SMART"],
+    electronics: ["GAFAS VR", "DRONE", "RELOJ INTELIGENTE", "CONSOLA DE JUEGOS"],
+    animals: ["CAMALEÓN", "LEOPARDO DE LAS NIEVES", "PAVO REAL", "CANGURO"],
+    school: ["MICROSCOPIO", "TELESCOPIO", "CALCULADORA", "GLOBO TERRAQUEO"],
+    food: ["TACOS", "EMPANADAS", "PASTA", "SUSHI"]
+  },
+  fr: {
+    vehicles: ["VAISSEAU SPATIAL", "SOUS-MARIN", "TROTTINETTE", "TRAIN A GRANDE VITESSE"],
+    household: ["ASPIRATEUR ROBOT", "MACHINE A CAFÉ", "LAMPE DE BUREAU"],
+    electronics: ["CASQUE VR", "DRONE", "MONTRE CONNECTÉE", "CONSOLE DE JEU"],
+    animals: ["CAMÉLÉON", "LÉOPARD DES NEIGES", "PAON", "KANGOUROU"],
+    school: ["MICROSCOPE", "TÉLESCOPE", "CALCULATRICE", "GLOBE"],
+    food: ["CROISSANT", "PASTA", "SUSHI", "QUICHE"]
+  }
+};
+
+const BOT_CLUES = {
+  en: ["It is related to technology or modern use.", "You can find this in daily life.", "It requires care or proper handling.", "It has a distinct feature."],
+  bn: ["এটি দৈনন্দিন জীবনের সাথে সম্পর্কিত।", "এটি ব্যবহার করা বেশ সহজ।", "এটির বিশেষ একটি বৈশিষ্ট্য আছে।", "এটি আমরা মাঝে মাঝেই দেখতে পাই।"],
+  hi: ["यह दैनिक जीवन से संबंधित है।", "इसका उपयोग करना आसान है।", "इसकी एक विशेष विशेषता है।"],
+  es: ["Es algo útil en la vida diaria.", "Tiene una característica especial.", "Es fácil de reconocer."],
+  fr: ["C'est utile dans la vie de tous les jours.", "Il a une caractéristique spéciale."]
+};
+
+const rooms = {};
+
+io.on('connection', (socket) => {
+  // Create Room
+  socket.on('createRoom', ({ playerName, avatar, category, language }) => {
+    const roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const lang = language || 'en';
+    const cat = category || 'vehicles';
+
+    rooms[roomCode] = {
+      code: roomCode,
+      host: socket.id,
+      category: cat,
+      language: lang,
+      players: [{ id: socket.id, name: playerName, avatar: avatar || '🤖', score: 0, isBot: false }],
+      gameState: 'LOBBY',
+      secretWord: '',
+      impostorId: null,
+      clues: [],
+      votes: {}
+    };
+    socket.join(roomCode);
+    socket.emit('roomCreated', rooms[roomCode]);
+  });
+
+  // Join Room
+  socket.on('joinRoom', ({ roomCode, playerName, avatar }) => {
+    const room = rooms[roomCode];
+    if (!room) return socket.emit('errorMsg', 'Room not found!');
+    if (room.gameState !== 'LOBBY') return socket.emit('errorMsg', 'Game already in progress!');
+    if (room.players.length >= 10) return socket.emit('errorMsg', 'Room is full!');
+
+    room.players.push({ id: socket.id, name: playerName, avatar: avatar || '🐱', score: 0, isBot: false });
+    socket.join(roomCode);
+    io.to(roomCode).emit('updateRoom', room);
+  });
+
+  // Add AI Bot
+  socket.on('addBot', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (room && room.host === socket.id && room.players.length < 10) {
+      const botId = 'bot_' + Math.random().toString(36).substring(2, 7);
+      const avatars = ['🤖', '👾', '🦊', '🐼', '🦁', '🦉'];
+      const botName = `AI Bot ${room.players.length + 1}`;
+      
+      room.players.push({
+        id: botId,
+        name: botName,
+        avatar: avatars[Math.floor(Math.random() * avatars.length)],
+        score: 0,
+        isBot: true
+      });
+      io.to(roomCode).emit('updateRoom', room);
+    }
+  });
+
+  // Start / Next Round Game
+  socket.on('startGame', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (!room || room.host !== socket.id) return;
+    if (room.players.length < 3) return socket.emit('errorMsg', 'Need at least 3 players to start!');
+
+    const langDb = WORD_DB[room.language] || WORD_DB.en;
+    const words = langDb[room.category] || langDb.vehicles;
+    room.secretWord = words[Math.floor(Math.random() * words.length)];
+
+    const impostorIndex = Math.floor(Math.random() * room.players.length);
+    room.impostorId = room.players[impostorIndex].id;
+
+    room.gameState = 'IN_GAME';
+    room.clues = [];
+    room.votes = {};
+
+    // Generate clues and votes for AI bots automatically
+    room.players.forEach(player => {
+      if (player.isBot) {
+        const botClueList = BOT_CLUES[room.language] || BOT_CLUES.en;
+        const randomClue = botClueList[Math.floor(Math.random() * botClueList.length)];
+        room.clues.push({ name: player.name, avatar: player.avatar, clue: randomClue });
+
+        // Bot Vote Logic
+        const targets = room.players.filter(p => p.id !== player.id);
+        const randomTarget = targets[Math.floor(Math.random() * targets.length)];
+        room.votes[player.id] = randomTarget.id;
+      } else {
+        io.to(player.id).emit('gameStarted', {
+          role: player.id === room.impostorId ? 'IMPOSTOR' : 'CREW',
+          word: player.id === room.impostorId ? '???' : room.secretWord,
+          room
+        });
+      }
+    });
+
+    io.to(roomCode).emit('updateRoom', room);
+  });
+
+  // Submit Clue
+  socket.on('submitClue', ({ roomCode, clue }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+    const player = room.players.find(p => p.id === socket.id);
+    if (player) {
+      room.clues.push({ name: player.name, avatar: player.avatar, clue });
+      io.to(roomCode).emit('updateRoom', room);
+    }
+  });
+
+  // Submit Vote
+  socket.on('submitVote', ({ roomCode, targetId }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+    room.votes[socket.id] = targetId;
+
+    if (Object.keys(room.votes).length >= room.players.length) {
+      const voteCounts = {};
+      Object.values(room.votes).forEach(v => {
+        voteCounts[v] = (voteCounts[v] || 0) + 1;
+      });
+
+      let suspectId = null;
+      let maxVotes = -1;
+      for (const [id, count] of Object.entries(voteCounts)) {
+        if (count > maxVotes) {
+          maxVotes = count;
+          suspectId = id;
+        }
+      }
+
+      const winner = suspectId === room.impostorId ? 'CREW' : 'IMPOSTOR';
+      room.gameState = 'RESULTS';
+
+      // Update Scores
+      room.players.forEach(p => {
+        if (winner === 'CREW' && p.id !== room.impostorId) p.score += 100;
+        if (winner === 'IMPOSTOR' && p.id === room.impostorId) p.score += 200;
+      });
+
+      io.to(roomCode).emit('gameOver', {
+        winner,
+        impostorId: room.impostorId,
+        secretWord: room.secretWord,
+        room
+      });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    for (const [code, room] of Object.entries(rooms)) {
+      room.players = room.players.filter(p => p.id !== socket.id);
+      if (room.players.length === 0) delete rooms[code];
+      else io.to(code).emit('updateRoom', room);
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server live on port ${PORT}`));
